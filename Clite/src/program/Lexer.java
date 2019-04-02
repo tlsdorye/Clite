@@ -1,3 +1,5 @@
+package program;
+
 import java.io.*;
 
 public class Lexer {
@@ -102,11 +104,34 @@ public class Lexer {
 				case '}':
 					ch = nextChar();
 					return Token.rightBraceTok;
+				case '[':
+					ch = nextChar();
+					return Token.leftBracketTok;
+				case ']':
+					ch = nextChar();
+					return Token.rightBracketTok;
+				case ';':
+					ch = nextChar();
+					return Token.semicolonTok;
+				case ',':
+					ch = nextChar();
+					return Token.commaTok;
 				case '&':
+					check('&');
+					return Token.andTok;
+				case '|':
+					check('|');
+					return Token.orTok;
 				case '=':
+					return chkOpt('=', Token.assignTok, Token.eqeqTok);
 				case '<':
+					return chkOpt('<', Token.ltTok, Token.lteqTok);
 				case '>':
+					return chkOpt('>', Token.gtTok, Token.gteqTok);
 				case '!':
+					return chkOpt('!', Token.notTok, Token.noteqTok);
+				default:
+					error("Illegal character " + ch);
 				}
 		} while (true);
 	}
@@ -122,12 +147,18 @@ public class Lexer {
 	private void check(char c) {
 		ch = nextChar();
 		if (ch != c)
-			error("illegal character, expecting " + c);
+			error("Illegal character, expecting " + c);
 		ch = nextChar();
 	}
 
 	private Token chkOpt(char c, Token one, Token two) {
-		return null; // student exercise
+		ch = nextChar();
+		if (ch == '=') {
+			ch = nextChar();
+			return two;
+		} else {
+			return one;
+		}
 	}
 
 	private String concat(String set) {
@@ -146,7 +177,13 @@ public class Lexer {
 	}
 
 	static public void main(String[] argv) {
-
-		
+		String filepath = "src/lexertest/test_file.clite";
+		//Lexer lexer = new Lexer(argv[0]);
+		Lexer lexer = new Lexer(filepath);
+		Token tok = lexer.next();
+		while (tok != Token.eofTok) {
+			System.out.println(tok.toString());
+			tok = lexer.next();
+		}
 	}
 }
