@@ -7,6 +7,6 @@ public enum TokenType {
 	LeftParen, RightParen, Semicolon, Comma, Assign,
 	Equals, Less, LessEqual, Greater, GreaterEqual,
 	Not, NotEqual, Plus, Minus, Multiply,
-	Divide, And, Or, Identifer, IntLiteral,
+	Divide, And, Or, Identifier, IntLiteral,
 	FloatLiteral, CharLiteral
 }

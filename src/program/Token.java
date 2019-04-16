@@ -72,7 +72,7 @@ public class Token {
 	}
 
 	public static Token mkIdentTok(String name) {
-		return new Token(TokenType.Identifer, name);
+		return new Token(TokenType.Identifier, name);
 	}
 
 	public static Token mkIntLiteral(String name) {
@@ -88,7 +88,7 @@ public class Token {
 	}
 
 	public String toString() {
-		if (type.compareTo(TokenType.Identifer) < 0)
+		if (type.compareTo(TokenType.Identifier) < 0)
 			return value;
 		return type + "\t" + value;
 	}
