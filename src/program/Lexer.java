@@ -125,11 +125,11 @@ public class Lexer {
 				case '=':
 					return chkOpt('=', Token.assignTok, Token.eqeqTok);
 				case '<':
-					return chkOpt('<', Token.ltTok, Token.lteqTok);
+					return chkOpt('=', Token.ltTok, Token.lteqTok);
 				case '>':
-					return chkOpt('>', Token.gtTok, Token.gteqTok);
+					return chkOpt('=', Token.gtTok, Token.gteqTok);
 				case '!':
-					return chkOpt('!', Token.notTok, Token.noteqTok);
+					return chkOpt('=', Token.notTok, Token.noteqTok);
 				default:
 					error("Illegal character " + ch);
 				}
@@ -153,7 +153,7 @@ public class Lexer {
 
 	private Token chkOpt(char c, Token one, Token two) {
 		ch = nextChar();
-		if (ch == '=') {
+		if (c == ch) {
 			ch = nextChar();
 			return two;
 		} else {
