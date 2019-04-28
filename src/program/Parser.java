@@ -18,6 +18,7 @@ public class Parser {
 
 	private String match(TokenType t) {
 		String value = token.value();
+		System.out.println(token.type() + " " + token.value());
 		if (token.type().equals(t))
 			token = lexer.next();
 		else
@@ -26,12 +27,12 @@ public class Parser {
 	}
 
 	private void error(TokenType tok) {
-		System.err.println("Syntax error: expecting: " + tok + "; saw: " + token);
+		System.err.println("tok-Syntax error: expecting: " + tok + "; saw: " + token);
 		System.exit(1);
 	}
 
 	private void error(String tok) {
-		System.err.println("Syntax error: expecting: " + tok + "; saw: " + token);
+		System.err.println("str-Syntax error: expecting: " + tok + "; saw: " + token);
 		System.exit(1);
 	}
 
@@ -43,7 +44,7 @@ public class Parser {
 		match(TokenType.LeftBrace);
 		// student exercise
 		Declarations declarations = declarations();
-		Block block = statements();
+		Block block = progstatements();
 		match(TokenType.RightBrace);
 		return new Program(declarations, block);
 	}
@@ -65,7 +66,7 @@ public class Parser {
 			v = new Variable(match(TokenType.Identifier));
 			d = new Declaration(v, t);
 			ds.add(d);
-			if (token.type().equals(TokenType.Comma))
+			if (!token.type().equals(TokenType.Comma))
 				break;
 			token = lexer.next();
 		}
@@ -85,6 +86,7 @@ public class Parser {
 			t = Type.CHAR;
 		else
 			error("Error in type construction");
+		token = lexer.next();
 		return t;
 	}
 
@@ -121,6 +123,18 @@ public class Parser {
 		return b;
 	}
 
+	private Block progstatements() {
+		Block b = new Block();
+		while (token.type().equals(TokenType.Semicolon)
+				|| token.type().equals(TokenType.LeftBrace)
+				|| token.type().equals(TokenType.Identifier)
+				|| token.type().equals(TokenType.If)
+				|| token.type().equals(TokenType.While)) {
+			b.members.add(statement());
+		}
+		return b;
+	}
+	
 	private Assignment assignment() {
 		// Assignment --> Identifier = Expression ;
 		Variable target = new Variable(match(TokenType.Identifier));
@@ -137,8 +151,11 @@ public class Parser {
 		Expression test = expression();
 		match(TokenType.RightParen);
 		Statement thenbranch = statement();
-		if(token.type().equals(TokenType.Else))
+		if(token.type().equals(TokenType.Else)) {
+			match(TokenType.Else);
 			return new Conditional(test, thenbranch,statement());
+		}
+			
 		return new Conditional(test, thenbranch);			
 	}
 
@@ -319,7 +336,7 @@ public class Parser {
 	public static void main(String args[]) {
 		Parser parser = new Parser(new Lexer(args[0]));
 		Program prog = parser.program();
-		prog.display(); // display abstract syntax tree
+		prog.display(0); // display abstract syntax tree
 	} // main
 
 } // Parser

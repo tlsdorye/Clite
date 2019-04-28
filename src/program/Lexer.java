@@ -177,7 +177,7 @@ public class Lexer {
 	}
 
 	static public void main(String[] argv) {
-		String filepath = "src/lexertest/test_file.clite";
+		String filepath = "src/Clitetest/parser_testfile.clite";
 		//Lexer lexer = new Lexer(argv[0]);
 		Lexer lexer = new Lexer(filepath);
 		Token tok = lexer.next();
