@@ -24,4 +24,9 @@ public class State extends HashMap<Variable, Value> {
 		return this;
 	}
 
+	public void display() {
+		for (Variable v : this.keySet())
+			System.out.println(v + ": " + this.get(v));
+	}
+
 }

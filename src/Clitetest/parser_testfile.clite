@@ -16,7 +16,6 @@ int main ( ) {
 		bvar = true;
 	}
 	ivar = 2 * 3 + 4;
-	bvar = bvar && false;
-//	ivar = -ivar;
+	fvar = fvar + 1.5;
 	bvar = ivar >= 5;
 }

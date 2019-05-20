@@ -30,7 +30,21 @@ public class TypeTransformer {
 				return new Binary(b.op.boolMap(b.op.val), t1, t2);
 			throw new IllegalArgumentException("should never reach here");
 		}
+
 		// student exercise
+		if (e instanceof Unary) {
+			Unary u = (Unary) e;
+			Type type = StaticTypeCheck.typeOf(u.term, tm);
+			Expression t0 = T(u.term, tm);
+			if (type == Type.BOOL)
+				return new Unary(u.op.boolMap(u.op.val), t0);
+			else if (type == Type.FLOAT)
+				return new Unary(u.op.floatMap(u.op.val), t0);
+			else if (type == Type.INT)
+				return new Unary(u.op.intMap(u.op.val), t0);
+			else if (type == Type.CHAR)
+				return new Unary(u.op.charMap(u.op.val), t0);
+		}
 		throw new IllegalArgumentException("should never reach here");
 	}
 
@@ -87,11 +101,11 @@ public class TypeTransformer {
 		System.out.println("\nBegin type checking...");
 		System.out.println("Type map:");
 		TypeMap map = StaticTypeCheck.typing(prog.decpart);
-		// map.display(); // student exercise
+		map.display(); // student exercise
 		StaticTypeCheck.V(prog);
 		Program out = T(prog, map);
 		System.out.println("Output AST");
-		// out.display(); // student exercise
+		out.display(0); // student exercise
 	} // main
 
 } // class TypeTransformer
