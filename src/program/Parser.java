@@ -18,7 +18,6 @@ public class Parser {
 
 	private String match(TokenType t) {
 		String value = token.value();
-		System.out.println(token.type() + " " + token.value());
 		if (token.type().equals(t))
 			token = lexer.next();
 		else
