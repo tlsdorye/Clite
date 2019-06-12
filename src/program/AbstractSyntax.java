@@ -1,56 +1,189 @@
 package program;
-//Abstract syntax for the language C++Lite,
-
-//exactly as it appears in Appendix B.
 
 import java.util.*;
 
-class Program {
-	// Program = Declarations decpart ; Block body
-	Declarations decpart;
-	Block body;
+class Indenter {
+	public int level;
 
-	Program(Declarations d, Block b) {
-		decpart = d;
-		body = b;
+	public Indenter(int next_level) {
+		level = next_level;
 	}
 
-	public void display(int level) {
+	public void display(String message) {
+		String tab = "";
+		System.out.println();
 		for (int i = 0; i < level; i++)
-			System.out.print(" ");
-		System.out.println("AST: ");
-		decpart.display(level + 1);
-		body.display(level + 1);
+			tab += "  ";
+		System.out.print(tab + message);
+	}
+}
+
+class Program {
+	Declarations globals;
+	Functions functions;
+
+	Program(Declarations d, Functions f) {
+		globals = d;
+		functions = f;
+	}
+
+	public void display() {
+		int level = 0;
+		Indenter indenter = new Indenter(level);
+		indenter.display("Program (abstract syntax): ");
+		globals.display(level + 1);
+		functions.display(level + 1);
 	}
 }
 
 class Declarations extends ArrayList<Declaration> {
-	// Declarations = Declaration*
-	// (a list of declarations d1, d2, ..., dn)
 	public void display(int level) {
-		System.out.print("\t");
-		System.out.println("Declaractions: ");
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.print("Declaractions: {");
-		for (int i = 0; i < size(); i++)
-			get(i).display(level);
-		System.out.println("}");
+		Indenter indenter = new Indenter(level);
+		indenter.display(getClass().toString().substring(12) + ": ");
+		indenter.display(" Global = {");
+		String sep = "";
+		for (Declaration d : this) {
+			System.out.print(sep);
+			d.display();
+			sep = ", ";
+		}
+		System.out.print("}");
 	}
 }
 
-class Declaration {
-	// Declaration = Variable v; Type t
+class Functions extends ArrayList<Function> {
+	public void display(int level) {
+		Indenter indenter = new Indenter(level);
+		indenter.display(getClass().toString().substring(12) + ": ");
+		for (Function f : this)
+			f.display(1);
+	}
+}
+
+class Function implements Statement {
+	Type t;
+	Variable id;
+	Declarations params, locals;
+	Block body;
+
+	public Function(Type t, Variable id, Declarations params, Declarations locals, Block body) {
+		this.t = t;
+		this.id = id;
+		this.params = params;
+		this.locals = locals;
+		this.body = body;
+	}
+
+	public void display(int level) {
+		String sep = "";
+		Indenter indenter = new Indenter(level + 1);
+		indenter.display(getClass().toString().substring(12) + " = ");
+		System.out.print(id + ";" + " Return type = " + t.id);
+		indenter.display("params = {");
+		if (params != null) {
+			for (int i = 0; i < params.size(); i++) {
+				System.out.print(sep + "<" + params.get(i).v + ", " + params.get(i).t.id + ">");
+				sep = ", ";
+			}
+		}
+		System.out.print("}");
+		indenter.display("local = {");
+		sep = "";
+		for (int i = 0; i < locals.size(); i++) {
+			System.out.print(sep + "<" + locals.get(i).v + ", " + locals.get(i).t.id + ">");
+			sep = ", ";
+		}
+		System.out.print("}");
+		body.display(level + 2);
+	}
+}
+
+class Call implements Statement, Expression {
+	Variable v;
+	Stack<Expression> arguments;
+
+	public Call(Variable v, Stack<Expression> arguments) {
+		this.v = v;
+		this.arguments = arguments;
+	}
+
+	public void display(int level) {
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": " + v.id);
+		indent.level++;
+		if (arguments.size() > 0) {
+			indent.display("args =");
+			for (int a = 0; a < arguments.size(); a++) {
+				arguments.get(a).display(level + 2);
+			}
+		}
+	}
+}
+
+class Return implements Statement {
+	Expression result;
+	Variable target;
+
+	public Return(Variable v, Expression e) {
+		result = e;
+		target = v;
+	}
+
+	public void display(int level) {
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ":");
+		target.display(level + 1);
+		result.display(level + 1);
+	}
+}
+
+abstract class Declaration {
 	Variable v;
 	Type t;
 
-	Declaration(Variable var, Type type) {
+	public void display() {
+	}
+}
+
+class VariableDecl extends Declaration {
+	VariableDecl() {
+	}
+
+	VariableDecl(Variable v, Type t) {
+		this.v = v;
+		this.t = t;
+	}
+
+	VariableDecl(String id, Type t) {
+		v = new Variable(id);
+		this.t = t;
+	}
+
+	public void display() {
+		System.out.print("<" + v + ", " + t.getId() + ">");
+	}
+}
+
+class ArrayDecl extends Declaration {
+	IntValue s;
+
+	ArrayDecl() {
+	}
+
+	ArrayDecl(Variable var, Type type, IntValue ival) {
 		v = var;
 		t = type;
-	} // declaration */
+		s = ival;
+	}
 
-	public void display(int level) {
-		System.out.print(" <" + t + ", " + v + "> ");
+	ArrayDecl(String id, Type type, IntValue ival) {
+		v = new Variable(id);
+		t = type;
+		s = ival;
+	}
+
+	public void display() {
+		System.out.print("<" + v + "[" + s.intValue() + "]" + ", " + t.getId() + ">");
 	}
 }
 
@@ -60,62 +193,63 @@ class Type {
 	final static Type BOOL = new Type("bool");
 	final static Type CHAR = new Type("char");
 	final static Type FLOAT = new Type("float");
+	final static Type VOID = new Type("void");
+	final static Type UNDEFINED = new Type("undefined");
+	final static Type UNUSED = new Type("unused");
 	// final static Type UNDEFINED = new Type("undef");
 
-	private String id;
+	protected String id;
 
-	private Type(String t) {
+	protected Type(String t) {
 		id = t;
 	}
 
-	public String toString() {
+	public String getId() {
 		return id;
 	}
 }
 
-abstract class Statement {
-	// Statement = Skip | Block | Assignment | Conditional | Loop
+interface Statement {
+	void display(int level);
+}
+
+class Skip implements Statement {
 	public void display(int level) {
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
 	}
 }
 
-class Skip extends Statement {
-}
-
-class Block extends Statement {
-	// Block = Statement*
-	// (a Vector of members)
+class Block implements Statement {
 	public ArrayList<Statement> members = new ArrayList<Statement>();
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("Blocks: ");
-		for (Statement st : members)
-			st.display(level);
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
+
+		for (Statement s : members)
+			s.display(level + 1);
 	}
 }
 
-class Assignment extends Statement {
-	// Assignment = Variable target; Expression source
-	Variable target;
+class Assignment implements Statement {
+	VariableRef target;
 	Expression source;
 
-	Assignment(Variable t, Expression e) {
+	Assignment(VariableRef t, Expression e) {
 		target = t;
 		source = e;
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print(" \t");
-		System.out.println("Assignment: ");
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
 		target.display(level + 1);
 		source.display(level + 1);
 	}
 }
 
-class Conditional extends Statement {
+class Conditional implements Statement {
 	// Conditional = Expression test; Statement thenbranch, elsebranch
 	Expression test;
 	Statement thenbranch, elsebranch;
@@ -134,16 +268,17 @@ class Conditional extends Statement {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("IfStatement:");
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
+
 		test.display(level + 1);
 		thenbranch.display(level + 1);
+		assert elsebranch != null : "else branch cannot be null";
 		elsebranch.display(level + 1);
 	}
 }
 
-class Loop extends Statement {
+class Loop implements Statement {
 	// Loop = Expression test; Statement body
 	Expression test;
 	Statement body;
@@ -154,24 +289,32 @@ class Loop extends Statement {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("WhileStatement:");
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
+
 		test.display(level + 1);
 		body.display(level + 1);
 	}
 }
 
-abstract class Expression {
-	// Expression = Variable | Value | Binary | Unary
+interface Expression {
+	void display(int level);
+}
+
+abstract class VariableRef implements Expression {
+	String id;
+
+	public String id() {
+		return id;
+	}
+
 	public void display(int level) {
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
 	}
 }
 
-class Variable extends Expression {
-	// Variable = String id
-	private String id;
-
+class Variable extends VariableRef {
 	Variable(String s) {
 		id = s;
 	}
@@ -181,7 +324,12 @@ class Variable extends Expression {
 	}
 
 	public boolean equals(Object obj) {
-		String s = ((Variable) obj).id;
+		String s = "";
+		if (obj instanceof Function) {
+			s = ((Function) obj).id.id;
+		} else {
+			s = ((Variable) obj).id;
+		}
 		return id.equals(s); // case-sensitive identifiers
 	}
 
@@ -190,16 +338,44 @@ class Variable extends Expression {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("Variable: " + id);
+		super.display(level);
+		System.out.print(id);
 	}
-
 }
 
-abstract class Value extends Expression {
-	// Value = IntValue | BoolValue |
-	// CharValue | FloatValue
+class ArrayRef extends VariableRef {
+	// ArrayRef = String id; Expression index
+	// private String id;
+	public Expression index;
+
+	ArrayRef(String s, Expression e) {
+		id = s;
+		index = e;
+	}
+	//
+	// public String id( ) { return id; }
+
+	public String toString() {
+		return id + "[" + index.toString() + "]";
+	}
+
+	public boolean equals(Object obj) {
+		String s = ((ArrayRef) obj).id;
+		return id.equals(s); // case-sensitive identifiers
+	}
+
+	public int hashCode() {
+		return id.hashCode();
+	}
+
+	public void display(int level) {
+		super.display(level);
+		System.out.print(id + "[" + index.toString() + "]");
+	}
+}
+
+abstract class Value implements Expression {
+	// Value = IntValue | BoolValue | CharValue | FloatValue
 	protected Type type;
 	protected boolean undef = true;
 
@@ -229,6 +405,11 @@ abstract class Value extends Expression {
 
 	Type type() {
 		return type;
+	}
+
+	public void display(int level) {
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
 	}
 
 	static Value mkValue(Type type) {
@@ -269,11 +450,9 @@ class IntValue extends Value {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("IntValue: " + value);
+		super.display(level);
+		System.out.print(value);
 	}
-
 }
 
 class BoolValue extends Value {
@@ -306,9 +485,8 @@ class BoolValue extends Value {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("BoolValue: " + value);
+		super.display(level);
+		System.out.print(value);
 	}
 }
 
@@ -337,9 +515,8 @@ class CharValue extends Value {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("CharValue: " + value);
+		super.display(level);
+		System.out.print(value);
 	}
 }
 
@@ -368,13 +545,12 @@ class FloatValue extends Value {
 	}
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("FloatValue: " + value);
+		super.display(level);
+		System.out.print(value);
 	}
 }
 
-class Binary extends Expression {
+class Binary implements Expression {
 	// Binary = Operator op; Expression term1, term2
 	Operator op;
 	Expression term1, term2;
@@ -386,33 +562,29 @@ class Binary extends Expression {
 	} // binary
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.print("Binary: ");
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
+
 		op.display(level + 1);
 		term1.display(level + 1);
 		term2.display(level + 1);
 	}
-
-	public String toString() {
-		return ("Binary: op=" + op + "term1=" + term1 + "term2=" + term2);
-	}
 }
 
-class Unary extends Expression {
+class Unary implements Expression {
 	// Unary = Operator op; Expression term
 	Operator op;
 	Expression term;
 
 	Unary(Operator o, Expression e) {
-		op = o;
+		op = o.val.equals("-") ? new Operator("neg") : o;
 		term = e;
 	} // unary
 
 	public void display(int level) {
-		for (int i = 0; i < level; i++)
-			System.out.print("\t");
-		System.out.println("Unary: ");
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": ");
+
 		op.display(level + 1);
 		term.display(level + 1);
 	}
@@ -437,7 +609,7 @@ class Operator {
 	final static String DIV = "/";
 	// UnaryOp = !
 	final static String NOT = "!";
-	final static String NEG = "-";
+	final static String NEG = "neg";
 	// CastOp = int | float | char
 	final static String INT = "int";
 	final static String FLOAT = "float";
@@ -456,7 +628,7 @@ class Operator {
 	final static String INT_TIMES = "INT*";
 	final static String INT_DIV = "INT/";
 	// UnaryOp = !
-	final static String INT_NEG = "-";
+	final static String INT_NEG = "INTNEG";
 	// RelationalOp = < | <= | == | != | >= | >
 	final static String FLOAT_LT = "FLOAT<";
 	final static String FLOAT_LE = "FLOAT<=";
@@ -470,7 +642,7 @@ class Operator {
 	final static String FLOAT_TIMES = "FLOAT*";
 	final static String FLOAT_DIV = "FLOAT/";
 	// UnaryOp = !
-	final static String FLOAT_NEG = "-";
+	final static String FLOAT_NEG = "FLOATNEG";
 	// RelationalOp = < | <= | == | != | >= | >
 	final static String CHAR_LT = "CHAR<";
 	final static String CHAR_LE = "CHAR<=";
@@ -548,8 +720,8 @@ class Operator {
 	final static String charMap[][] = { { EQ, CHAR_EQ }, { NE, CHAR_NE }, { LT, CHAR_LT }, { LE, CHAR_LE },
 			{ GT, CHAR_GT }, { GE, CHAR_GE }, { INT, C2I } };
 
-	final static String boolMap[][] = { { EQ, BOOL_EQ }, { NE, BOOL_NE }, { LT, BOOL_LT }, { LE, BOOL_LE },
-			{ GT, BOOL_GT }, { GE, BOOL_GE }, };
+	final static String boolMap[][] = { { AND, AND }, { OR, OR }, { EQ, BOOL_EQ }, { NE, BOOL_NE }, { LT, BOOL_LT },
+			{ LE, BOOL_LE }, { GT, BOOL_GT }, { GE, BOOL_GE } };
 
 	final static private Operator map(String[][] tmap, String op) {
 		for (int i = 0; i < tmap.length; i++)
@@ -576,6 +748,7 @@ class Operator {
 	}
 
 	public void display(int level) {
-		System.out.println(val);
+		Indenter indent = new Indenter(level);
+		indent.display(getClass().toString().substring(12) + ": " + val);
 	}
 }

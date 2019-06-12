@@ -1,22 +1,20 @@
 package program;
 
-import java.util.*;
+import java.util.Stack;
 
 public class Parser {
-	// Recursive descent parser that inputs a C++Lite program and
-	// generates its abstract syntax. Each method corresponds to
-	// a concrete syntax grammar rule, which appears as a comment
-	// at the beginning of the method.
 
-	Token token; // current token from the input stream
+	Token token;          // current token from the input stream
+	Variable cFunction;
 	Lexer lexer;
+	String funcId = "main";
 
-	public Parser(Lexer ts) { // Open the C++Lite source program
-		lexer = ts; // as a token stream, and
+	public Parser(Lexer ts) { // Open the Clite source program
+		lexer = ts;           // as a token stream, and
 		token = lexer.next(); // retrieve its first Token
 	}
 
-	private String match(TokenType t) {
+	private String match (TokenType t) {
 		String value = token.value();
 		if (token.type().equals(t))
 			token = lexer.next();
@@ -26,54 +24,125 @@ public class Parser {
 	}
 
 	private void error(TokenType tok) {
-		System.err.println("tok-Syntax error: expecting: " + tok + "; saw: " + token);
+		System.err.println("Syntax error: expecting: " + tok
+				+ "; saw: " + token);
 		System.exit(1);
 	}
 
 	private void error(String tok) {
-		System.err.println("str-Syntax error: expecting: " + tok + "; saw: " + token);
+		System.err.println("Syntax error: expecting: " + tok
+				+ "; saw: " + token);
 		System.exit(1);
 	}
 
 	public Program program() {
-		// Program --> void main ( ) '{' Declarations Statements '}'
-		TokenType[] header = { TokenType.Int, TokenType.Main, TokenType.LeftParen, TokenType.RightParen };
-		for (int i = 0; i < header.length; i++) // bypass "int main ( )"
-			match(header[i]);
-		match(TokenType.LeftBrace);
-		// student exercise
-		Declarations declarations = declarations();
-		Block block = progstatements();
-		match(TokenType.RightBrace);
-		return new Program(declarations, block);
+		Declarations globals = new Declarations();
+		Functions functions = new Functions();
+		globals.addAll(functionOrGlobal(functions));
+		return new Program(globals, functions);
 	}
 
-	private Declarations declarations() {
+	private Declarations functionOrGlobal(Functions functions) {
 		// Declarations --> { Declaration }
-		Declarations ds = new Declarations();
-		while (isType())
-			declaration(ds);
+		Declarations ds = new Declarations ();
+
+		while (isType()) {
+			declaration(ds, functions);
+		}
+		
 		return ds;
 	}
 
-	private void declaration(Declarations ds) {
-		// Declaration --> Type Identifier { , Identifier } ;
-		Variable v;
-		Declaration d;
+	private Function mainFunction(Functions f) {
+		TokenType[ ] header = {TokenType.Main,
+				TokenType.LeftParen, TokenType.RightParen};
+		for (int i=0; i<header.length; i++)   // bypass "int main ( )"
+			match(header[i]);
+		
+		match(TokenType.LeftBrace);
+		Declarations decpart = functionOrGlobal(f);
+		Block body = statements();
+		match(TokenType.RightBrace);
+		return new Function(Type.INT, new Variable("main"), null, decpart, body);
+	}
+	
+	private void declaration(Declarations d, Functions f) {
 		Type t = type();
-		while (true) {
-			v = new Variable(match(TokenType.Identifier));
-			d = new Declaration(v, t);
-			ds.add(d);
-			if (!token.type().equals(TokenType.Comma))
+
+		while (!token.type().equals(TokenType.Eof)) {
+			if (token.value().equals("main")) {
+				f.add(mainFunction(f));
 				break;
-			token = lexer.next();
+			}
+			
+			Variable v = new Variable(token.value());
+			match(TokenType.Identifier);
+			
+			// Let's check to see if we have a function by checking if 
+			// the next character is a parentheses.
+			if (token.type().equals(TokenType.LeftParen)) {
+				function(f, t,	v);
+				if (isType()) {
+					t = type();
+				} else { 
+					break;
+				}
+			} else { // Otherwise it is a variable.
+				d.add(new VariableDecl(v, t));
+
+				if (token.type().equals(TokenType.Comma)) {
+					match(TokenType.Comma);
+				} else if (token.type().equals(TokenType.Semicolon)) {
+					match(TokenType.Semicolon);
+					if (isType()) {
+						t = type();
+					} else {
+						break;
+					}
+				}
+			}
 		}
-		match(TokenType.Semicolon);
 	}
 
-	private Type type() {
-		// Type --> int | bool | float | char
+	private void function(Functions f, Type t, Variable v) {
+		cFunction = v;
+		match(TokenType.LeftParen);
+		Declarations params = parameters();
+		match(TokenType.RightParen);
+		match(TokenType.LeftBrace);
+		Declarations locals = functionOrGlobal(f);
+		Block body = statements();
+		match(TokenType.RightBrace);
+	
+		boolean added = f.add(new Function(t, v, params, locals, body));
+		
+		if (!added) {
+			System.err.println("Declarations of variable already exists.");
+			System.exit(1);
+		}
+	}
+
+	private Declarations parameters() {
+		Declarations params = new Declarations();
+		
+		// We simply need to declare a new variable for each parameter.
+		// This is simply a rehash of what we do for local variables inside a function
+		while (!token.type().equals(TokenType.RightParen)) {
+			Type t = type();
+			Variable v = new Variable(token.value());
+			match(TokenType.Identifier);
+			params.add(new VariableDecl(v, t));
+
+			if (token.type().equals(TokenType.Comma)) {
+				match(TokenType.Comma);
+			}
+		}
+
+		return params;
+	}
+
+	private Type type () {
+		// Type  -->  int | bool | float | char
 		Type t = null;
 		if (token.type().equals(TokenType.Int))
 			t = Type.INT;
@@ -82,83 +151,78 @@ public class Parser {
 		else if (token.type().equals(TokenType.Float))
 			t = Type.FLOAT;
 		else if (token.type().equals(TokenType.Char))
-			t = Type.CHAR;
-		else
-			error("Error in type construction");
-		token = lexer.next();
+			t = Type.CHAR; 
+		else if (token.type().equals(TokenType.Void))
+			t = Type.VOID;
+		else error("int | bool | float | char | void");
+		token = lexer.next(); // pass over the type
 		return t;
 	}
 
 	private Statement statement() {
 		// Statement --> ; | Block | Assignment | IfStatement | WhileStatement
-		Statement s = null;
-		if (token.type().equals(TokenType.Semicolon))
-			s = new Skip();
-		else if (token.type().equals(TokenType.LeftBrace))
+		Statement s = new Skip();
+		if (token.type().equals(TokenType.Semicolon))    // Skip
+			match(TokenType.Semicolon);
+		else if (token.type().equals(TokenType.LeftBrace)) { // Block
+			token = lexer.next();
 			s = statements();
-		else if (token.type().equals(TokenType.If))
+			match(TokenType.RightBrace);
+		}
+		else if (token.type().equals(TokenType.If))         // IfStatement
 			s = ifStatement();
-		else if (token.type().equals(TokenType.While))
+		else if (token.type().equals(TokenType.While))      // WhileStatement
 			s = whileStatement();
-		else if (token.type().equals(TokenType.Identifier))
-			s = assignment();
-		else
-			error("Error in statement construction");
+		else if (token.type().equals(TokenType.Identifier)) { // Assignment
+			Variable v = new Variable(token.value());
+			match(TokenType.Identifier);
+			
+			if (token.type().equals(TokenType.Assign)){ 
+				s = assignment(v);
+			} else if (token.type().equals(TokenType.LeftParen)) {
+				s = callStatement(v);
+				match(TokenType.Semicolon);
+			}
+		} else if (token.type().equals(TokenType.Return)) {
+			return returnStatement(cFunction);
+		}
+		else error("Illegal statement");
 		return s;
 	}
 
-	private Block statements() {
+	private Block statements () {
 		// Block --> '{' Statements '}'
 		Block b = new Block();
-		match(TokenType.LeftBrace);
-		while (token.type().equals(TokenType.Semicolon)
-				|| token.type().equals(TokenType.LeftBrace)
-				|| token.type().equals(TokenType.Identifier)
-				|| token.type().equals(TokenType.If)
-				|| token.type().equals(TokenType.While)) {
-			b.members.add(statement());
-		}
-		match(TokenType.RightBrace);
-		return b;
-	}
-
-	private Block progstatements() {
-		Block b = new Block();
-		while (token.type().equals(TokenType.Semicolon)
-				|| token.type().equals(TokenType.LeftBrace)
-				|| token.type().equals(TokenType.Identifier)
-				|| token.type().equals(TokenType.If)
-				|| token.type().equals(TokenType.While)) {
+		while (! token.type().equals(TokenType.RightBrace)) {
 			b.members.add(statement());
 		}
 		return b;
 	}
 	
-	private Assignment assignment() {
-		// Assignment --> Identifier = Expression ;
-		Variable target = new Variable(match(TokenType.Identifier));
+	private Assignment assignment (Variable v) {
+		// Assignment --> Identifier [ [ Expression ] ] = Expression ;
 		match(TokenType.Assign);
 		Expression source = expression();
 		match(TokenType.Semicolon);
-		return new Assignment(target, source);
+		return new Assignment(v, source);
 	}
 
-	private Conditional ifStatement() {
+	private Conditional ifStatement () {
 		// IfStatement --> if ( Expression ) Statement [ else Statement ]
 		match(TokenType.If);
 		match(TokenType.LeftParen);
 		Expression test = expression();
 		match(TokenType.RightParen);
 		Statement thenbranch = statement();
-		if(token.type().equals(TokenType.Else)) {
+		Statement elsebranch = new Skip();
+		if (token.type().equals(TokenType.Else)){
 			match(TokenType.Else);
-			return new Conditional(test, thenbranch,statement());
+			elsebranch = statement();
 		}
-			
-		return new Conditional(test, thenbranch);			
+		return new Conditional(test, thenbranch, elsebranch);
 	}
 
-	private Loop whileStatement() {
+	private Loop whileStatement () {
 		// WhileStatement --> while ( Expression ) Statement
 		match(TokenType.While);
 		match(TokenType.LeftParen);
@@ -168,54 +232,75 @@ public class Parser {
 		return new Loop(test, body);
 	}
 
-	private Expression expression() {
+	private Call callStatement(Variable v) {
+		match(TokenType.LeftParen);
+		
+		Stack<Expression> params = new Stack<Expression>();
+		while (!(token.type().equals(TokenType.RightParen))) { 
+			params.push(expression());
+			if (token.type().equals(TokenType.Comma)) {
+				match(TokenType.Comma);
+			}
+		}
+		
+		match(TokenType.RightParen);
+		
+		return new Call(v, params);
+	}
+	
+	private Return returnStatement(Variable v) {
+		match(TokenType.Return);
+		Expression finalReturn = expression();
+		match(TokenType.Semicolon);
+		return new Return(v, finalReturn);
+	}
+	
+	private Expression expression () {
 		// Expression --> Conjunction { || Conjunction }
-		Expression exp = conjunction();
-		while(token.type().equals(TokenType.Or))
-		{
-			Operator op = new Operator(match(token.type()));
-			Expression temp = expression();
-			exp = new Binary(op, exp, temp);
+		Expression e = conjunction();
+	
+		while (token.type().equals(TokenType.Or)) {
+			Operator op = new Operator(match(TokenType.Or));
+			Expression term2 = conjunction();
+			e = new Binary(op, e, term2);
 		}
-		return exp;
+		return e;
 	}
 
-	private Expression conjunction() {
+	private Expression conjunction () {
 		// Conjunction --> Equality { && Equality }
-		Expression exp = equality();
-		while(token.type().equals(TokenType.And))
-		{
-			Operator op = new Operator(match(token.type()));
-			Expression temp = conjunction();
-			exp = new Binary(op, exp, temp);
+		Expression e = equality();
+		while (token.type().equals(TokenType.And)) {
+			Operator op = new Operator(match(TokenType.And));
+			Expression term2 = equality();
+			e = new Binary(op, e, term2);
 		}
-		return exp;
+		return e;
 	}
 
-	private Expression equality() {
+	private Expression equality () {
 		// Equality --> Relation [ EquOp Relation ]
-		Expression exp = relation();
-		while(isEqualityOp())
-		{
+		Expression e = relation();
+		while (isEqualityOp()) {
 			Operator op = new Operator(match(token.type()));
-			Expression temp = relation();
-			exp = new Binary(op, exp, temp);
+			Expression term2 = relation();
+			e = new Binary(op, e, term2);
 		}
-		return exp;
+		return e;
 	}
 
-	private Expression relation() {
+	private Expression relation (){
 		// Relation --> Addition [RelOp Addition]
-		Expression exp = addition();
-		while(isRelationalOp()) {
+		Expression e = addition();
+		while (isRelationalOp()){
 			Operator op = new Operator(match(token.type()));
-			Expression temp = addition();
-			exp = new Binary(op, exp, temp);
+			Expression term2 = addition();
+			e = new Binary(op, e, term2);
 		}
-		return exp;
+		return e;
 	}
 
-	private Expression addition() {
+	private Expression addition () {
 		// Addition --> Term { AddOp Term }
 		Expression e = term();
 		while (isAddOp()) {
@@ -226,7 +311,7 @@ public class Parser {
 		return e;
 	}
 
-	private Expression term() {
+	private Expression term () {
 		// Term --> Factor { MultiplyOp Factor }
 		Expression e = factor();
 		while (isMultiplyOp()) {
@@ -243,99 +328,106 @@ public class Parser {
 			Operator op = new Operator(match(token.type()));
 			Expression term = primary();
 			return new Unary(op, term);
-		} else
-			return primary();
+		}
+		else return primary();
 	}
 
-	private Expression primary() {
-		// Primary --> Identifier | Literal | ( Expression )
-		// | Type ( Expression )
+	private Expression primary () {
+		// Primary --> Identifier [ [ Expression ] ] | Literal | ( Expression )
+		//             | Type ( Expression )
 		Expression e = null;
 		if (token.type().equals(TokenType.Identifier)) {
-			e = new Variable(match(TokenType.Identifier));
+			Variable v = new Variable(token.value());
+			match(TokenType.Identifier);
+			if (token.type().equals(TokenType.LeftParen)) {
+				e = callStatement(v);
+			} else {
+				e = v;
+			}
 		} else if (isLiteral()) {
 			e = literal();
 		} else if (token.type().equals(TokenType.LeftParen)) {
-			token = lexer.next();
+			match(TokenType.LeftParen);
 			e = expression();
 			match(TokenType.RightParen);
-		} else if (isType()) {
+		} else if (isType( )) {
 			Operator op = new Operator(match(token.type()));
 			match(TokenType.LeftParen);
 			Expression term = expression();
 			match(TokenType.RightParen);
 			e = new Unary(op, term);
-		} else
+		} else 
 			error("Identifier | Literal | ( | Type");
 		return e;
 	}
 
-	private Value literal() {
-		Value value = null;
-		String stval = token.value();
-		if (token.type().equals(TokenType.IntLiteral)) {
-			value = new IntValue (Integer.parseInt(stval));
-			token = lexer.next();
+	private Value literal( ) {
+		String s = null;
+		switch (token.type()) {
+		case IntLiteral:
+			s = match(TokenType.IntLiteral);
+			return new IntValue(Integer.parseInt(s));
+		case CharLiteral:
+			s = match(TokenType.CharLiteral);
+			return new CharValue(s.charAt(0));
+		case True:
+			s = match(TokenType.True);
+			return new BoolValue(true);
+		case False:
+			s = match(TokenType.False);
+			return new BoolValue(false);
+		case FloatLiteral:
+			s = match(TokenType.FloatLiteral);
+			return new FloatValue(Float.parseFloat(s));
 		}
-		else if (token.type().equals(TokenType.FloatLiteral))  {
-			value = new FloatValue(Float.parseFloat(stval));
-			token = lexer.next();
-		}
-		else if (token.type().equals(TokenType.CharLiteral))  {
-			value = new CharValue(stval.charAt(0));
-			token = lexer.next();
-		}
-	    else if (token.type().equals(TokenType.True))  {
-	        value = new BoolValue(true);
-	        token = lexer.next();
-	    }
-	    else if (token.type().equals(TokenType.False))  {
-	        value = new BoolValue(false);
-	        token = lexer.next();
-	    }
-	     else error ("Error in literal value contruction");
-		return value;
-	    }
-
-	private boolean isAddOp() {
-		return token.type().equals(TokenType.Plus) || token.type().equals(TokenType.Minus);
+		throw new IllegalArgumentException( "should not reach here");
 	}
 
-	private boolean isMultiplyOp() {
-		return token.type().equals(TokenType.Multiply) || token.type().equals(TokenType.Divide);
+
+	private boolean isAddOp( ) {
+		return token.type().equals(TokenType.Plus) ||
+				token.type().equals(TokenType.Minus);
 	}
 
-	private boolean isUnaryOp() {
-		return token.type().equals(TokenType.Not) || token.type().equals(TokenType.Minus);
+	private boolean isMultiplyOp( ) {
+		return token.type().equals(TokenType.Multiply) ||
+				token.type().equals(TokenType.Divide);
 	}
 
-	private boolean isEqualityOp() {
-		return token.type().equals(TokenType.Equals) || token.type().equals(TokenType.NotEqual);
+	private boolean isUnaryOp( ) {
+		return token.type().equals(TokenType.Not) ||
+				token.type().equals(TokenType.Minus);
 	}
 
-	private boolean isRelationalOp() {
-		return token.type().equals(TokenType.Less) || token.type().equals(TokenType.LessEqual)
-				|| token.type().equals(TokenType.Greater) || token.type().equals(TokenType.GreaterEqual);
+	private boolean isEqualityOp( ) {
+		return token.type().equals(TokenType.Equals) ||
+				token.type().equals(TokenType.NotEqual);
 	}
 
-	private boolean isType() {
-		return token.type().equals(TokenType.Int) || token.type().equals(TokenType.Bool)
-				|| token.type().equals(TokenType.Float) || token.type().equals(TokenType.Char);
+	private boolean isRelationalOp( ) {
+		return token.type().equals(TokenType.Less) ||
+				token.type().equals(TokenType.LessEqual) ||
+				token.type().equals(TokenType.Greater) ||
+				token.type().equals(TokenType.GreaterEqual);
 	}
 
-	private boolean isLiteral() {
-		return token.type().equals(TokenType.IntLiteral) || isBooleanLiteral()
-				|| token.type().equals(TokenType.FloatLiteral) || token.type().equals(TokenType.CharLiteral);
+	private boolean isType( ) {
+		return token.type().equals(TokenType.Int)
+				|| token.type().equals(TokenType.Bool)
+				|| token.type().equals(TokenType.Float)
+				|| token.type().equals(TokenType.Char)
+				|| token.type().equals(TokenType.Void);
 	}
 
-	private boolean isBooleanLiteral() {
-		return token.type().equals(TokenType.True) || token.type().equals(TokenType.False);
+	private boolean isLiteral( ) {
+		return token.type().equals(TokenType.IntLiteral) ||
+				isBooleanLiteral() ||
+				token.type().equals(TokenType.FloatLiteral) ||
+				token.type().equals(TokenType.CharLiteral);
 	}
 
-	public static void main(String args[]) {
-		Parser parser = new Parser(new Lexer(args[0]));
-		Program prog = parser.program();
-		prog.display(0); // display abstract syntax tree
-	} // main
-
+	private boolean isBooleanLiteral( ) {
+		return token.type().equals(TokenType.True) ||
+				token.type().equals(TokenType.False);
+	}
 } // Parser
